@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<!--
+Created using JS Bin
+http://jsbin.com
+
+Copyright (c) 2026 by anonymous (http://jsbin.com/nokoxutuyu/2/edit)
+
+Released under the MIT license: http://jsbin.mit-license.org
+-->
+<meta name="robots" content="noindex">
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tech-Stopwatch | 科技感碼錶</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background: #0f172a; /* 深色科技底 */
+        }
+        .timer-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* 圓形進度條動畫 */
+        .progress-ring__circle {
+            transition: stroke-dashoffset 0.1s linear;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        /* 按鈕禁用樣式 */
+        button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+
+    <div class="glass-card w-full max-auto max-w-md rounded-[2.5rem] p-8 shadow-2xl overflow-hidden relative">
+        <div class="flex justify-between items-center mb-8">
+            <span class="text-cyan-400 text-xs tracking-widest font-bold">CHRONO-MODULE V1.0</span>
+            <div class="h-2 w-2 rounded-full bg-cyan-500 animate-pulse"></div>
+        </div>
+
+        <div class="relative flex justify-center items-center mb-10">
+            <svg class="w-64 h-64">
+                <circle class="text-slate-700" stroke-width="6" stroke="currentColor" fill="transparent" r="120" cx="128" cy="128" />
+                <circle id="progress-bar" class="text-cyan-500 progress-ring__circle" stroke-width="6" stroke-dasharray="754" stroke-dashoffset="754" stroke-linecap="round" stroke="currentColor" fill="transparent" r="120" cx="128" cy="128" />
+            </svg>
+            
+            <div class="absolute text-center">
+                <span class="text-slate-400 text-xs block mb-1 tracking-widest">ELAPSED TIME</span>
+                <div id="display" class="timer-font text-5xl font-bold text-white tracking-tighter">
+                    00:00:00
+                </div>
+                <div id="ms-display" class="timer-font text-cyan-400 text-xl font-light mt-1">
+                    .00
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 mb-8">
+            <button id="startPauseBtn" class="py-4 rounded-2xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition-all shadow-lg shadow-cyan-900/20 active:scale-95">
+                開始
+            </button>
+            <button id="resetBtn" disabled class="py-4 rounded-2xl bg-slate-700 hover:bg-slate-600 text-slate-300 font-bold transition-all active:scale-95">
+                重設
+            </button>
+        </div>
+
+        <div class="bg-slate-900/50 rounded-2xl p-4 h-40 overflow-y-auto border border-slate-800">
+            <div class="text-slate-500 text-xs mb-3 flex justify-between uppercase font-bold tracking-widest">
+                <span>Data Logs</span>
+                <span>Interval</span>
+            </div>
+            <ul id="laps" class="space-y-2">
+                <li class="text-slate-600 text-sm italic text-center mt-4">等待數據輸入...</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let startTime;
+        let elapsedTime = 0;
+        let timerInterval;
+        let state = 'idle'; // idle, running, paused
+
+        const display = document.getElementById('display');
+        const msDisplay = document.getElementById('ms-display');
+        const startPauseBtn = document.getElementById('startPauseBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const lapsList = document.getElementById('laps');
+        const progressBar = document.getElementById('progress-bar');
+
+        function timeToString(time) {
+            let diffInHrs = time / 3600000;
+            let hh = Math.floor(diffInHrs);
+
+            let diffInMin = (diffInHrs - hh) * 60;
+            let mm = Math.floor(diffInMin);
+
+            let diffInSec = (diffInMin - mm) * 60;
+            let ss = Math.floor(diffInSec);
+
+            let diffInMs = (diffInSec - ss) * 100;
+            let ms = Math.floor(diffInMs);
+
+            let formattedMM = mm.toString().padStart(2, "0");
+            let formattedSS = ss.toString().padStart(2, "0");
+            let formattedHH = hh.toString().padStart(2, "0");
+            let formattedMS = ms.toString().padStart(2, "0");
+
+            return {
+                main: `${formattedHH}:${formattedMM}:${formattedSS}`,
+                ms: `.${formattedMS}`,
+                totalSec: ss // 用於進度條動畫
+            };
+        }
+
+        function updateDisplay() {
+            const timeObj = timeToString(elapsedTime);
+            display.innerHTML = timeObj.main;
+            msDisplay.innerHTML = timeObj.ms;
+            
+            // 進度條：每分鐘一圈 (60秒)
+            const offset = 754 - ((elapsedTime % 60000) / 60000) * 754;
+            progressBar.style.strokeDashoffset = offset;
+        }
+
+        function start() {
+            state = 'running';
+            startTime = Date.now() - elapsedTime;
+            timerInterval = setInterval(function printTime() {
+                elapsedTime = Date.now() - startTime;
+                updateDisplay();
+            }, 10);
+            
+            // UI切換
+            startPauseBtn.innerHTML = "暫停";
+            startPauseBtn.classList.replace('bg-cyan-600', 'bg-amber-500');
+            startPauseBtn.classList.replace('hover:bg-cyan-500', 'hover:bg-amber-400');
+            resetBtn.disabled = false;
+        }
+
+        function pause() {
+            state = 'paused';
+            clearInterval(timerInterval);
+            
+            // UI切換
+            startPauseBtn.innerHTML = "繼續";
+            startPauseBtn.classList.replace('bg-amber-500', 'bg-cyan-600');
+            startPauseBtn.classList.replace('hover:bg-amber-400', 'hover:bg-cyan-500');
+            
+            // 紀錄一筆 Log (對應附圖的 LAP 概念)
+            addLap();
+        }
+
+        function reset() {
+            state = 'idle';
+            clearInterval(timerInterval);
+            elapsedTime = 0;
+            updateDisplay();
+            
+            // UI重置
+            startPauseBtn.innerHTML = "開始";
+            startPauseBtn.classList.remove('bg-amber-500');
+            startPauseBtn.classList.add('bg-cyan-600');
+            resetBtn.disabled = true;
+            lapsList.innerHTML = '<li class="text-slate-600 text-sm italic text-center mt-4">等待數據輸入...</li>';
+            progressBar.style.strokeDashoffset = 754;
+        }
+
+        function addLap() {
+            if (lapsList.querySelector('li.italic')) lapsList.innerHTML = '';
+            const li = document.createElement('li');
+            const timeObj = timeToString(elapsedTime);
+            li.className = "flex justify-between text-slate-300 text-sm font-mono bg-slate-800/50 p-2 rounded-lg border-l-2 border-cyan-500";
+            li.innerHTML = `<span>LAP ${lapsList.children.length + 1}</span> <span>${timeObj.main}${timeObj.ms}</span>`;
+            lapsList.prepend(li);
+        }
+
+        startPauseBtn.addEventListener('click', () => {
+            if (state === 'idle' || state === 'paused') {
+                start();
+            } else {
+                pause();
+            }
+        });
+
+        resetBtn.addEventListener('click', reset);
+
+    </script>
+</body>
+</html>
